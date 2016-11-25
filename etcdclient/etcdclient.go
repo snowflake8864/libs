@@ -1,4 +1,4 @@
-package libs
+package etcdclient
 
 import (
 	"github.com/coreos/etcd/clientv3"
@@ -48,26 +48,14 @@ func (e *EtcdClient) Get(key string) (string, error) {
 	return string(resp.Kvs[0].Value), nil
 }
 
-// CAS put value to etcd.
-func (e *EtcdClient) CAS(cmpKey, cmpValue, key, value string) error {
-	cmp := clientv3.Compare(clientv3.Value(cmpKey), "=", cmpValue)
-	if cmpValue == "" {
-		cmp = clientv3.Compare(clientv3.CreateRevision(cmpKey), "=", 0)
-	}
+func (e *EtcdClient) Set(key, value string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), DialTimeout)
-	pr, err := e.client.Txn(ctx).
-		If(cmp).
-		Then(clientv3.OpPut(key, value)).
-		Commit()
+	_, err := e.client.Put(ctx, key, value)
 	cancel()
 	if err != nil {
 		return errors.Trace(err)
 	}
-
-	if !pr.Succeeded {
-		return errors.New("put key failed")
-	}
-
+	log.Debugf("set key:%s, value:%s", key, value)
 	return nil
 }
 
