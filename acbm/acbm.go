@@ -1,8 +1,8 @@
 package acbm
 
 import (
-	//   "github.com/snowflake8864/libs/list"
-	"container/list"
+	"github.com/snowflake8864/libs/list"
+	//"container/list"
 	"fmt"
 	"github.com/ngaut/log"
 	"strings"
@@ -31,6 +31,7 @@ type patternTreeNode struct {
 
 //
 type PatternInfo struct {
+	list    list.ListHead
 	pattern string
 	lenth   int
 	id      int
@@ -42,10 +43,9 @@ type Tree struct {
 	maxDepth       int
 	minPatternSize int
 	badShift       [256]int
-	//patternList    *PatternInfo
-	patternArray []PatternInfo
+	//patternArray   []PatternInfo
 	patternCount int
-	plist        *list.List
+	plist        *list.ListHead
 	handler      HitHandler
 }
 
@@ -58,7 +58,7 @@ type HitHandler interface {
 func New(handler HitHandler) *Tree {
 	tree := new(Tree)
 	tree.handler = handler
-	tree.plist = list.New()
+	tree.plist = list.NewListHead()
 	return tree
 	//return &Tree{handler: handler}
 }
@@ -71,15 +71,23 @@ func toLower(b byte) byte {
 	}
 }
 
-//func (tree *Tree) BuildOne()
+/*
+func (tree *Tree) BuildOne(patternKey string) bool {
 
+
+}
+*/
 func (tree *Tree) Build(dictionary []string) bool {
 
-	arraySize := len(dictionary)
-	tree.patternArray = make([]PatternInfo, arraySize)
+	npattern := 0
 	for i, s := range dictionary {
-		tree.patternArray[i].pattern = s
-		tree.patternArray[i].id = i
+
+		patternInfo := new(PatternInfo)
+		patternInfo.pattern = s
+		patternInfo.id = i
+		patternInfo.list.Value = patternInfo
+		tree.plist.AddTail(&patternInfo.list)
+		npattern++
 	}
 	var parent *patternTreeNode
 	maxPatternLen, minPatternLen := 0, PATTERN_LEN
@@ -91,11 +99,12 @@ func (tree *Tree) Build(dictionary []string) bool {
 	root.label = -2 //tree root lable
 	root.depth = 0  //the depth of tree
 	//process string, add these to tree
-	npattern := len(tree.patternArray)
-	for i := 0; i < npattern; i++ {
-		patLen := len(tree.patternArray[i].pattern)
+	label := 0
+	tree.plist.ForEach(func(list *list.ListHead) bool {
+		patternInfo := list.Value.(*PatternInfo)
+		patLen := len(patternInfo.pattern)
 		if patLen == 0 {
-			continue
+			return true
 		} else {
 			if patLen > PATTERN_LEN {
 				patLen = PATTERN_LEN
@@ -110,7 +119,7 @@ func (tree *Tree) Build(dictionary []string) bool {
 			parent = root
 			var ch_i int
 			for ch_i = 0; ch_i < patLen; ch_i++ {
-				ch := tree.patternArray[i].pattern[ch_i]
+				ch := patternInfo.pattern[ch_i]
 				if !CASE_SENSITIVE {
 					ch = toLower(ch)
 				}
@@ -123,14 +132,19 @@ func (tree *Tree) Build(dictionary []string) bool {
 			if ch_i < patLen {
 
 				for ; ch_i < patLen; ch_i++ {
-					ch := tree.patternArray[i].pattern[ch_i]
+					ch := patternInfo.pattern[ch_i]
 
 					if !CASE_SENSITIVE {
 						ch = toLower(ch)
 					}
 					node := new(patternTreeNode)
 					if node == nil {
-						goto fail
+						if tree.root != nil {
+							cleanTree(tree.root)
+							tree.root = nil
+						}
+						return false
+						//goto fail
 					}
 					node.depth = ch_i + 1
 					node.ch = ch
@@ -149,23 +163,20 @@ func (tree *Tree) Build(dictionary []string) bool {
 				}
 			}
 		}
-		parent.label = i
-		parent.pattern = &tree.patternArray[i]
+		parent.label = label
+		label++
+		parent.pattern = patternInfo
 		//log.Debugf("pattern lable %d", i)
 		//		tree.plist.PushFront(pData)
-	}
+
+		return true
+	})
 	tree.patternCount = npattern
 	tree.root = root
 	tree.maxDepth = maxPatternLen
 	tree.minPatternSize = minPatternLen
 	log.Debugf("Build pattern ok")
 	return true
-fail:
-	if tree.root != nil {
-		cleanTree(tree.root)
-		tree.root = nil
-	}
-	return false
 }
 
 func cleanTree(root *patternTreeNode) {
@@ -191,8 +202,9 @@ func (tree *Tree) ComputeBCShifts() {
 		tree.badShift[i] = tree.minPatternSize
 	}
 	for i := tree.minPatternSize - 1; i > 0; i-- {
-		for j := 0; j < tree.patternCount; j++ {
-			ch := tree.patternArray[j].pattern[i]
+
+		tree.plist.ForEach(func(list *list.ListHead) bool {
+			ch := list.Value.(*PatternInfo).pattern[i]
 			if !CASE_SENSITIVE {
 				ch = toLower(ch)
 			}
@@ -204,7 +216,8 @@ func (tree *Tree) ComputeBCShifts() {
 					tree.badShift[ch-32] = i
 				}
 			}
-		}
+			return true
+		})
 	}
 	return
 }
@@ -319,13 +332,21 @@ func (tree *Tree) computeGSShift(pat1 string, pat2 string) bool {
 }
 
 func (tree *Tree) computeGSShifts() {
-	for pat_i := 0; pat_i < tree.patternCount; pat_i++ {
-		for pat_j := 0; pat_j < tree.patternCount; pat_j++ {
-			ppat_i := tree.patternArray[pat_i].pattern
-			ppat_j := tree.patternArray[pat_j].pattern
-			tree.computeGSShift(ppat_i, ppat_j)
+	/*
+		for pat_i := 0; pat_i < tree.patternCount; pat_i++ {
+			for pat_j := 0; pat_j < tree.patternCount; pat_j++ {
+				ppat_i := tree.patternArray[pat_i].pattern
+				ppat_j := tree.patternArray[pat_j].pattern
+				tree.computeGSShift(ppat_i, ppat_j)
+			}
 		}
-	}
+	*/
+	tree.plist.DForEach(func(list1, list2 *list.ListHead) bool {
+		ppat_i := list1.Value.(*PatternInfo).pattern
+		ppat_j := list2.Value.(*PatternInfo).pattern
+		tree.computeGSShift(ppat_i, ppat_j)
+		return true
+	})
 }
 
 func (tree *Tree) ComputeShifts() {
