@@ -12,15 +12,14 @@ type ListHead struct {
 }
 
 func NewListHead() *ListHead {
-	head := &ListHead{}
-	head.Init()
-	return head
+	return new(ListHead).Init()
 }
 
 //init list head
-func (list *ListHead) Init() {
+func (list *ListHead) Init() *ListHead {
 	list.next = list
 	list.prev = list
+	return list
 }
 
 func add(n, prev, next *ListHead) {
@@ -28,6 +27,10 @@ func add(n, prev, next *ListHead) {
 	n.next = next
 	n.prev = prev
 	prev.next = n
+}
+
+func Add1(head, n *ListHead) {
+	add(n, head, head.next)
 }
 
 func (head *ListHead) Add(n *ListHead) {
@@ -122,20 +125,31 @@ func (list *ListHead) PrevEntry() interface{} {
 }
 
 type ListFunc func(list *ListHead) bool
+type DListFunc func(list1, list2 *ListHead) bool
 
 func (head *ListHead) ForEach(fn ListFunc) {
-	var pos *ListHead
-	for pos = head.next; pos != head; pos = pos.next {
-		if fn(pos) {
+	for pos := head.next; pos != head; pos = pos.next {
+		if !fn(pos) {
 			break
 		}
 	}
 }
+func (head *ListHead) DForEach(fn DListFunc) {
+	for pos0 := head.next; pos0 != head; pos0 = pos0.next {
 
+		for pos1 := head.next; pos1 != head; pos1 = pos1.next {
+			if !fn(pos0, pos1) {
+				break
+			}
+		}
+	}
+}
 func (head *ListHead) ForEachPrev(fn ListFunc) {
-	var pos *ListHead
-	for pos = head.prev; pos != head; pos = pos.prev {
+	for pos := head.prev; ; pos = pos.prev {
 		if !fn(pos) {
+			break
+		}
+		if pos == head {
 			break
 		}
 	}
@@ -144,9 +158,13 @@ func (head *ListHead) ForEachPrev(fn ListFunc) {
 func (head *ListHead) ForEachSafe(fn ListFunc) {
 	var pos, n *ListHead
 	pos = head.next
-	for pos != head {
+	for {
 		n = pos.next
 		if !fn(pos) {
+			break
+		}
+
+		if pos == head {
 			break
 		}
 		pos = n
@@ -156,17 +174,14 @@ func (head *ListHead) ForEachSafe(fn ListFunc) {
 
 func (head *ListHead) ForEachPrevSafe(fn ListFunc) {
 	var pos, n *ListHead
-	//for pos = head.prev, n = pos.prev; pos != head; pos = n, n = pos.prev {
-	for pos, n = head.prev, pos.prev; pos != head; pos, n = n, pos.prev {
+
+	pos = head.prev
+	for {
+		n = pos.prev
 		if !fn(pos) {
 			break
 		}
-	}
-
-	pos = head.prev
-	for pos != head {
-		n = pos.prev
-		if !fn(pos) {
+		if pos == head {
 			break
 		}
 		pos = n
