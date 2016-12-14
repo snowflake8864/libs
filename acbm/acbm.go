@@ -43,14 +43,14 @@ type Tree struct {
 	maxDepth       int
 	minPatternSize int
 	badShift       [256]int
-	//patternArray   []PatternInfo
-	patternCount int
-	plist        *list.ListHead
-	handler      HitHandler
+	patternCount   int
+	label          int
+	plist          *list.ListHead
+	handler        HitHandler
 }
 
 type HitHandler interface {
-	process(text []byte, data interface{})
+	process(text []byte, data interface{}, offset int)
 	//    mu      sync.RWMutex
 
 }
@@ -71,24 +71,23 @@ func toLower(b byte) byte {
 	}
 }
 
-/*
-func (tree *Tree) BuildOne(patternKey string) bool {
+func (tree *Tree) CreatePattern(patternKey string, value interface{}) bool {
+	patternInfo := new(PatternInfo)
+	if patternInfo == nil {
+		return false
+	}
 
-
+	patternInfo.pattern = patternKey
+	//	patternInfo.id = i
+	patternInfo.list.Value = patternInfo
+	patternInfo.Value = value
+	tree.plist.AddTail(&patternInfo.list)
+	return true
 }
-*/
-func (tree *Tree) Build(dictionary []string) bool {
+
+func (tree *Tree) BuildPattern() bool {
 
 	npattern := 0
-	for i, s := range dictionary {
-
-		patternInfo := new(PatternInfo)
-		patternInfo.pattern = s
-		patternInfo.id = i
-		patternInfo.list.Value = patternInfo
-		tree.plist.AddTail(&patternInfo.list)
-		npattern++
-	}
 	var parent *patternTreeNode
 	maxPatternLen, minPatternLen := 0, PATTERN_LEN
 	root := new(patternTreeNode)
@@ -99,7 +98,7 @@ func (tree *Tree) Build(dictionary []string) bool {
 	root.label = -2 //tree root lable
 	root.depth = 0  //the depth of tree
 	//process string, add these to tree
-	label := 0
+	//	label := 0
 	tree.plist.ForEach(func(list *list.ListHead) bool {
 		patternInfo := list.Value.(*PatternInfo)
 		patLen := len(patternInfo.pattern)
@@ -163,12 +162,13 @@ func (tree *Tree) Build(dictionary []string) bool {
 				}
 			}
 		}
-		parent.label = label
-		label++
+		parent.label = tree.label
+		tree.label++
 		parent.pattern = patternInfo
 		//log.Debugf("pattern lable %d", i)
 		//		tree.plist.PushFront(pData)
 
+		npattern++
 		return true
 	})
 	tree.patternCount = npattern
@@ -176,6 +176,21 @@ func (tree *Tree) Build(dictionary []string) bool {
 	tree.maxDepth = maxPatternLen
 	tree.minPatternSize = minPatternLen
 	log.Debugf("Build pattern ok")
+	return true
+}
+
+func (tree *Tree) Build(dictionary []string) bool {
+
+	for i, s := range dictionary {
+
+		patternInfo := new(PatternInfo)
+		patternInfo.pattern = s
+		patternInfo.id = i
+		patternInfo.list.Value = patternInfo
+		tree.plist.AddTail(&patternInfo.list)
+	}
+
+	tree.BuildPattern()
 	return true
 }
 
@@ -332,15 +347,6 @@ func (tree *Tree) computeGSShift(pat1 string, pat2 string) bool {
 }
 
 func (tree *Tree) computeGSShifts() {
-	/*
-		for pat_i := 0; pat_i < tree.patternCount; pat_i++ {
-			for pat_j := 0; pat_j < tree.patternCount; pat_j++ {
-				ppat_i := tree.patternArray[pat_i].pattern
-				ppat_j := tree.patternArray[pat_j].pattern
-				tree.computeGSShift(ppat_i, ppat_j)
-			}
-		}
-	*/
 	tree.plist.DForEach(func(list1, list2 *list.ListHead) bool {
 		ppat_i := list1.Value.(*PatternInfo).pattern
 		ppat_j := list2.Value.(*PatternInfo).pattern
@@ -381,7 +387,7 @@ func (tree *Tree) Search(text []byte) int {
 				log.Debugf("Matched(%d) ", node.label)
 				log.Debugf("%s ", text[baseIndex:])
 
-				tree.handler.process(text[baseIndex:], node.pattern)
+				tree.handler.process(text[baseIndex:], node.pattern.Value, baseIndex)
 				nmatched++
 			}
 			curIndex++

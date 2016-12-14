@@ -13,19 +13,7 @@ func assert(t *testing.T, b bool) {
 	}
 }
 
-type Mystruct struct{}
-
-func (mystruct *Mystruct) process(text []byte, data interface{}) {
-	fmt.Println(text)
-	Pattern := data.(*PatternInfo)
-	fmt.Println("Pattern:%v", Pattern)
-}
-
-func TestNewACBM(t *testing.T) {
-	tree := New(&Mystruct{})
-	assert(t, tree != nil)
-}
-
+/*
 func TestBuild(t *testing.T) {
 	tree := New(&Mystruct{})
 	assert(t, tree != nil)
@@ -42,4 +30,38 @@ func TestBuild(t *testing.T) {
 	nmatched := tree.Search([]byte("A Golang implementation of the AC-BM string  multiPattern matching algorithm,by zebra, snowflake"))
 	assert(t, nmatched == 3)
 	//tree.Print()
+}
+*/
+
+type pattern struct {
+	offset int
+	index  int
+}
+
+type Mystruct struct{}
+
+func (mystruct *Mystruct) process(text []byte, data interface{}, offset int) {
+	//fmt.Printf("%s\n", string(text))
+	fmt.Println(string(text[0:]))
+	p := data.(*pattern)
+	fmt.Printf("Pattern:%d--%d\n", p.index, offset)
+}
+
+func TestBuildPattern(t *testing.T) {
+	tree := New(&Mystruct{})
+	assert(t, tree != nil)
+	keys := []string{"snow", "zebra", "AC-BM", "雪花"}
+	for i := 0; i < len(keys); i++ {
+		p := new(pattern)
+		p.index = i
+
+		tree.CreatePattern(keys[i], p)
+	}
+	tree.BuildPattern()
+	tree.ComputeShifts()
+
+	tree.ComputeBCShifts()
+	nmatched := tree.Search([]byte("A Golang implementation of the AC-BM string  multiPattern matching algorithm,by zebra, snowflake, Countless stars in the sky, but the moon is only one, 雪花啤酒好喝吗?"))
+	assert(t, nmatched == 3)
+	//	tree.Print()
 }
